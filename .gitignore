@@ -1,0 +1,12 @@
+node_modules/
+*/node_modules/
+frontend/dist/
+dist-electron/
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+*.log
+.DS_Store
+.claude/

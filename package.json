@@ -1,0 +1,60 @@
+{
+  "name": "bible-theology-notebook",
+  "version": "1.0.0",
+  "description": "聖經神學筆記",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "electron:setup": "electron-rebuild -f -w better-sqlite3",
+    "electron:dev": "npm run build:frontend && electron .",
+    "electron:build": "npm run build:frontend && electron-builder --mac",
+    "build:frontend": "cd frontend && npm run build",
+    "bible:download": "node download-bible.js",
+    "bible:verify": "node verify-bible.js",
+    "bible:check": "node check-bible.js",
+    "bible:fix": "node fix-bible-edge-cases.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.faithcovenant.bible-notebook",
+    "productName": "聖經神學筆記",
+    "copyright": "Copyright © 2024",
+    "mac": {
+      "category": "public.app-category.education",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ]
+    },
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "backend/src/**/*",
+      "frontend/dist/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache/**/*",
+      "!node_modules/electron{,-*}/**/*",
+      "!node_modules/@electron/**/*",
+      "!node_modules/electron-builder/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "frontend/dist/**/*",
+      "backend/src/bible-data/**/*"
+    ]
+  }
+}

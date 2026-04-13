@@ -642,3 +642,39 @@ body {
 .ai-type-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent2); }
 .ai-type-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .ai-type-btn.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent2); }
+
+/* ── Print styles ──────────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+
+  body { background: #fff !important; color: #000 !important; font-family: serif; }
+
+  .sidebar, .top-bar, .global-search-overlay { display: none !important; }
+
+  .main-content { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
+
+  .print-note .card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+    background: #fff !important;
+  }
+
+  .note-ref { font-size: 22px !important; font-weight: 700 !important; color: #000 !important; }
+
+  .md-preview { font-size: 12pt !important; line-height: 1.8 !important; color: #000 !important; }
+
+  .md-preview h1, .md-preview h2, .md-preview h3 { color: #000 !important; }
+
+  .md-preview blockquote { border-left: 3px solid #999 !important; color: #333 !important; }
+
+  .tag-pill { border: 1px solid #999 !important; background: #f5f5f5 !important; color: #333 !important; }
+
+  .doctrine-link-card { border: 1px solid #ccc !important; background: #fafafa !important; }
+
+  .doctrine-link-tag { color: #333 !important; }
+
+  a { color: #000 !important; text-decoration: underline !important; }
+
+  @page { margin: 2cm; }
+}

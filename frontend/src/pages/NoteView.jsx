@@ -105,15 +105,16 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
   };
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="print-note">
+      <div className="page-header no-print">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button className="btn-ghost" onClick={() => onNavigate("notes")}><Icons.Back /></button>
           <h2 className="page-title">筆記詳情</h2>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={() => onNavigate("edit-note", { noteId: note.id })}><Icons.Edit /> 編輯</button>
-          <button className="btn btn-danger" onClick={() => { if (confirm("確定刪除此筆記？")) onDelete(note.id); }}><Icons.Trash /> 刪除</button>
+          <button className="btn no-print" onClick={() => window.print()} title="列印筆記"><Icons.FileText /> 列印</button>
+          <button className="btn no-print" onClick={() => onNavigate("edit-note", { noteId: note.id })}><Icons.Edit /> 編輯</button>
+          <button className="btn btn-danger no-print" onClick={() => { if (confirm("確定刪除此筆記？")) onDelete(note.id); }}><Icons.Trash /> 刪除</button>
         </div>
       </div>
 
@@ -133,14 +134,14 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
         </div>
       </div>
 
-      <ScripturePanel
+      <div className="no-print"><ScripturePanel
         bookId={note.bookId}
         chapterStart={note.chapterStart}
         chapterEnd={note.chapterEnd}
         verseStart={note.verseStart}
         verseEnd={note.verseEnd}
         collapsible={true}
-      />
+      /></div>
 
       {docLinks.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
@@ -278,11 +279,11 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
         )}
       </div>
 
-      <AiPanel
+      <div className="no-print"><AiPanel
         note={note}
         btTags={(note.btTags || []).map(id => data.btTags.find(t => t.id === id)).filter(Boolean)}
         stTags={(note.stTags || []).map(id => data.stTags.find(t => t.id === id)).filter(Boolean)}
-      />
+      /></div>
     </div>
   );
 }

@@ -78,12 +78,34 @@ cd frontend && npm run build
 ### 步驟 1：從 Mac 同步到 NAS
 
 ```bash
-rsync -av --exclude node_modules --exclude dist --exclude '.git' \
+/opt/homebrew/bin/rsync -av --delete \
+  --exclude node_modules --exclude dist --exclude .git \
+  --exclude dist-electron --exclude 'notebook.db*' --exclude .DS_Store \
   /Users/ivansu/bible-theology-notebook/ \
   Ivan_Main@192.168.50.8:/volume1/docker/bible-notebook/bible-theology-notebook/
 ```
 
 > **注意**：來源路徑結尾有 `/`，會同步目錄內容而非目錄本身。
+>
+> **一定要用 `/opt/homebrew/bin/rsync`（Homebrew 版）**：macOS 內建的 `rsync` 是
+> `openrsync`，即使 SSH 金鑰正常也會 `Permission denied`（連密碼都不問就被拒）。
+> 若尚未安裝：`brew install rsync`。用 `rsync --version | head -1` 確認為 3.x 而非 openrsync。
+>
+> `--delete` 讓 NAS 與本機一致（本機刪掉的檔 NAS 也會刪）。正式資料庫在另一個
+> volume（已排除 `notebook.db*`），不受影響。第一次可加 `-n` dry-run 先看要刪哪些檔。
+
+**備援方案：tar over ssh**（若 rsync 仍有問題時使用）
+
+```bash
+cd /Users/ivansu/bible-theology-notebook
+tar czf - \
+  --exclude node_modules --exclude dist --exclude .git \
+  --exclude dist-electron --exclude 'notebook.db*' --exclude .DS_Store \
+  . | ssh Ivan_Main@192.168.50.8 \
+  'mkdir -p /volume1/docker/bible-notebook/bible-theology-notebook && tar xzf - -C /volume1/docker/bible-notebook/bible-theology-notebook'
+```
+
+> NAS 端 GNU tar 會噴 `Ignoring unknown extended header keyword ...`（Apple xattr），無害。
 
 ### 步驟 2：SSH 進 NAS
 

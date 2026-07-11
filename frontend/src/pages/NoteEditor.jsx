@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BIBLE_BOOKS, BOOK_MAP } from '../data/bibleBooks.js';
 import { getBookRef, } from '../utils/getBookRef.js';
 import { getVerseCount } from '../data/bibleBooks.js';
@@ -12,7 +12,7 @@ import { TagSelector } from '../components/TagSelector.jsx';
 import { DoctrineLinkEditor } from '../components/DoctrineLinkEditor.jsx';
 import { ScripturePanel } from '../components/ScripturePanel.jsx';
 
-export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate }) {
+export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirtyChange }) {
   const existing = noteId ? data.notes.find(n => n.id === noteId) : null;
   const [bookId, setBookId] = useState(existing?.bookId || "");
   const [chapterStart, setChapterStart] = useState(existing?.chapterStart || "");
@@ -27,6 +27,32 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate }) {
     noteId ? (data.doctrineLinks || []).filter(l => l.noteId === noteId).map(l => ({ doctrineId: l.doctrineId, annotation: l.annotation })) : []
   );
   const [preview, setPreview] = useState(false);
+
+  const initialDocLinks = noteId
+    ? (data.doctrineLinks || []).filter(l => l.noteId === noteId).map(l => ({ doctrineId: l.doctrineId, annotation: l.annotation }))
+    : [];
+  const isDirty =
+    bookId !== (existing?.bookId || "") ||
+    chapterStart !== (existing?.chapterStart || "") ||
+    chapterEnd !== (existing?.chapterEnd || "") ||
+    verseStart !== (existing?.verseStart || "") ||
+    verseEnd !== (existing?.verseEnd || "") ||
+    title !== (existing?.title || "") ||
+    content !== (existing?.content || "") ||
+    JSON.stringify(selBt) !== JSON.stringify(existing?.btTags || []) ||
+    JSON.stringify(selSt) !== JSON.stringify(existing?.stTags || []) ||
+    JSON.stringify(docLinks) !== JSON.stringify(initialDocLinks);
+
+  // Report unsaved-changes state to the parent so navigation can warn.
+  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  // Warn on window/app close while there are unsaved changes.
+  useEffect(() => {
+    const handler = (e) => { if (isDirty) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   const book = BOOK_MAP[bookId];
   const maxCh = book ? book.ch : 0;
@@ -51,8 +77,24 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate }) {
       createdAt: existing?.createdAt || Date.now(),
       updatedAt: Date.now(),
     };
+    // Clear dirty flag before save-triggered navigation so it doesn't warn.
+    onDirtyChange?.(false);
     onSave(note, docLinks);
   };
+
+  // Cmd/Ctrl+S saves; use a ref so the listener always calls the latest handler.
+  const saveRef = useRef(handleSave);
+  saveRef.current = handleSave;
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        saveRef.current();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <div>

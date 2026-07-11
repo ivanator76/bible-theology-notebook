@@ -437,6 +437,18 @@ body {
   font-family: var(--font-zh);
 }
 
+.scripture-ref {
+  color: var(--accent);
+  border-bottom: 1px dashed var(--accent);
+  cursor: pointer;
+  transition: background 0.1s;
+  border-radius: 2px;
+}
+.scripture-ref:hover {
+  background: var(--accent-light);
+  border-bottom-style: solid;
+}
+
 .tag-section-title {
   font-size: 11px;
   font-weight: 700;
@@ -667,6 +679,8 @@ body {
   .md-preview h1, .md-preview h2, .md-preview h3 { color: #000 !important; }
 
   .md-preview blockquote { border-left: 3px solid #999 !important; color: #333 !important; }
+
+  .scripture-ref { color: #000 !important; border-bottom: none !important; background: none !important; }
 
   .tag-pill { border: 1px solid #999 !important; background: #f5f5f5 !important; color: #333 !important; }
 

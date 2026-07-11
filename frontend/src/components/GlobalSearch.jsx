@@ -3,9 +3,29 @@ import { BOOK_MAP } from '../data/bibleBooks.js';
 import { getBookRef } from '../utils/getBookRef.js';
 import { Icons } from './Icons.jsx';
 
+// Build a short snippet around the first query match, with the match highlighted.
+function Snippet({ text, query }) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(query.toLowerCase());
+  if (idx === -1) return null;
+  const start = Math.max(0, idx - 24);
+  const end = Math.min(text.length, idx + query.length + 40);
+  const before = (start > 0 ? '…' : '') + text.slice(start, idx);
+  const hit = text.slice(idx, idx + query.length);
+  const after = text.slice(idx + query.length, end) + (end < text.length ? '…' : '');
+  return (
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+      {before}<mark style={{ background: 'var(--accent-light)', color: 'var(--accent2)', fontWeight: 600, padding: '0 1px', borderRadius: 2 }}>{hit}</mark>{after}
+    </div>
+  );
+}
+
 export function GlobalSearch({ data, onNavigate, onClose }) {
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(0);
   const inputRef = useRef(null);
+  const itemRefs = useRef([]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -33,7 +53,44 @@ export function GlobalSearch({ data, onNavigate, onClose }) {
     return { notes, resources, doctrines: [...doctrines, ...btMatches], chains };
   }, [query, data]);
 
-  const hasResults = results.notes.length + results.resources.length + results.doctrines.length + results.chains.length > 0;
+  // Flatten every result row into one ordered list so arrow keys can walk it.
+  const items = useMemo(() => {
+    const list = [];
+    results.notes.forEach(n => list.push({ type: 'note', activate: () => { onNavigate("view-note", { noteId: n.id }); onClose(); } }));
+    results.chains.forEach(c => list.push({ type: 'chain', activate: () => { onNavigate("chains", { chainId: c.id }); onClose(); } }));
+    results.doctrines.forEach(t => list.push({ type: 'doctrine', activate: () => { onNavigate(t.id.startsWith("st-") ? "doctrines" : "notes"); onClose(); } }));
+    results.resources.forEach(() => list.push({ type: 'resource', activate: () => { onNavigate("resources"); onClose(); } }));
+    return list;
+  }, [results, onNavigate, onClose]);
+
+  const hasResults = items.length > 0;
+
+  useEffect(() => { setSelected(0); }, [query]);
+  useEffect(() => {
+    itemRefs.current[selected]?.scrollIntoView({ block: 'nearest' });
+  }, [selected]);
+
+  const onKeyDown = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelected(i => Math.min(i + 1, items.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSelected(i => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); items[selected]?.activate(); }
+    else if (e.key === "Escape") { onClose(); }
+  };
+
+  const q = query.toLowerCase();
+  let flatIndex = 0;
+  const rowProps = (isSel) => ({
+    ref: el => { itemRefs.current[isSel.i] = el; },
+    onMouseEnter: () => setSelected(isSel.i),
+    style: {
+      padding: "8px 10px", cursor: "pointer", borderRadius: "var(--radius-sm)",
+      background: selected === isSel.i ? "var(--accent-light)" : "transparent",
+    },
+  });
+
+  const sectionTitle = (label, n) => (
+    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", padding: "8px 8px 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label} ({n})</div>
+  );
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80 }} onClick={onClose}>
@@ -41,8 +98,9 @@ export function GlobalSearch({ data, onNavigate, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 560, background: "var(--surface)", borderRadius: "var(--radius)", border: "1px solid var(--border)", boxShadow: "var(--shadow2)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
           <Icons.Search />
-          <input ref={inputRef} style={{ flex: 1, border: "none", outline: "none", fontSize: 16, background: "transparent", color: "var(--text)" }}
+          <input ref={inputRef} onKeyDown={onKeyDown} style={{ flex: 1, border: "none", outline: "none", fontSize: 16, background: "transparent", color: "var(--text)" }}
             placeholder="搜尋筆記、資料、教義、追蹤鏈..." value={query} onChange={e => setQuery(e.target.value)} />
+          <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>↑↓ 選擇 · ⏎ 開啟</span>
           <button className="btn-ghost" onClick={onClose}><Icons.X /></button>
         </div>
 
@@ -52,47 +110,62 @@ export function GlobalSearch({ data, onNavigate, onClose }) {
 
             {results.notes.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", padding: "8px 8px 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>筆記 ({results.notes.length})</div>
-                {results.notes.map(n => (
-                  <div key={n.id} onClick={() => { onNavigate("view-note", { noteId: n.id }); onClose(); }} style={{ padding: "8px 10px", cursor: "pointer", borderRadius: "var(--radius-sm)", transition: "background 0.1s" }} onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent2)" }}>{getBookRef(n.bookId, n.chapterStart, n.chapterEnd, n.verseStart, n.verseEnd)}</div>
-                    {n.title && <div style={{ fontSize: 12, color: "var(--text)" }}>{n.title}</div>}
-                  </div>
-                ))}
+                {sectionTitle("筆記", results.notes.length)}
+                {results.notes.map(n => {
+                  const isSel = { i: flatIndex++ };
+                  return (
+                    <div key={n.id} {...rowProps(isSel)} onClick={items[isSel.i].activate}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent2)" }}>{getBookRef(n.bookId, n.chapterStart, n.chapterEnd, n.verseStart, n.verseEnd)}</div>
+                      {n.title && <div style={{ fontSize: 12, color: "var(--text)" }}>{n.title}</div>}
+                      <Snippet text={n.content} query={q} />
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {results.chains.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", padding: "8px 8px 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>追蹤鏈 ({results.chains.length})</div>
-                {results.chains.map(c => (
-                  <div key={c.id} onClick={() => { onNavigate("chains", { chainId: c.id }); onClose(); }} style={{ padding: "8px 10px", cursor: "pointer", borderRadius: "var(--radius-sm)", transition: "background 0.1s" }} onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent2)" }}>{c.name}</div>
-                  </div>
-                ))}
+                {sectionTitle("追蹤鏈", results.chains.length)}
+                {results.chains.map(c => {
+                  const isSel = { i: flatIndex++ };
+                  return (
+                    <div key={c.id} {...rowProps(isSel)} onClick={items[isSel.i].activate}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent2)" }}>{c.name}</div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {results.doctrines.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", padding: "8px 8px 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>標籤/教義 ({results.doctrines.length})</div>
-                {results.doctrines.map(t => (
-                  <div key={t.id} onClick={() => { onNavigate(t.id.startsWith("st-") ? "doctrines" : "notes"); onClose(); }} style={{ padding: "6px 10px", cursor: "pointer", borderRadius: "var(--radius-sm)", display: "flex", alignItems: "center", gap: 6, transition: "background 0.1s" }} onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <span className="tag-dot" style={{ background: t.color }} /><span style={{ fontSize: 13 }}>{t.name}</span>
-                  </div>
-                ))}
+                {sectionTitle("標籤/教義", results.doctrines.length)}
+                {results.doctrines.map(t => {
+                  const isSel = { i: flatIndex++ };
+                  return (
+                    <div key={t.id} {...rowProps(isSel)} onClick={items[isSel.i].activate}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="tag-dot" style={{ background: t.color }} /><span style={{ fontSize: 13 }}>{t.name}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {results.resources.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", padding: "8px 8px 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>外部資料 ({results.resources.length})</div>
-                {results.resources.map(r => (
-                  <div key={r.id} onClick={() => { onNavigate("resources"); onClose(); }} style={{ padding: "8px 10px", cursor: "pointer", borderRadius: "var(--radius-sm)", transition: "background 0.1s" }} onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent2)" }}>{r.title}</div>
-                    {r.author && <div style={{ fontSize: 12, color: "var(--muted)" }}>{r.author}</div>}
-                  </div>
-                ))}
+                {sectionTitle("外部資料", results.resources.length)}
+                {results.resources.map(r => {
+                  const isSel = { i: flatIndex++ };
+                  return (
+                    <div key={r.id} {...rowProps(isSel)} onClick={items[isSel.i].activate}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent2)" }}>{r.title}</div>
+                      {r.author && <div style={{ fontSize: 12, color: "var(--muted)" }}>{r.author}</div>}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

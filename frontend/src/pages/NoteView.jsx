@@ -7,6 +7,7 @@ import { Icons } from '../components/Icons.jsx';
 import { TagPill } from '../components/TagPill.jsx';
 import { RESOURCE_TYPES } from '../data/resourceTypes.js';
 import { ScripturePanel } from '../components/ScripturePanel.jsx';
+import { ScriptureRefPopover } from '../components/ScriptureRefPopover.jsx';
 import { AiPanel } from '../components/AiPanel.jsx';
 
 function CrossRefAnnotation({ targetNote, onConfirm, onCancel }) {
@@ -41,8 +42,19 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
   const [showCrossRefPicker, setShowCrossRefPicker] = useState(false);
   const [crossRefSearch, setCrossRefSearch] = useState("");
   const [crossRefNote, setCrossRefNote] = useState("");
+  const [scriptureRef, setScriptureRef] = useState(null);
 
-  if (!note) return <div className="empty">找不到此筆記</div>;
+  const handleContentClick = (e) => {
+    const el = e.target.closest('.scripture-ref');
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setScriptureRef({
+      book: el.dataset.book,
+      chs: el.dataset.chs, vss: el.dataset.vss,
+      che: el.dataset.che, vse: el.dataset.vse,
+      x: rect.left, y: rect.bottom,
+    });
+  };
 
   const docLinks = (data.doctrineLinks || []).filter(l => l.noteId === noteId);
 
@@ -93,6 +105,8 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
     return list.sort((a, b) => BOOK_ORDER[a.bookId] - BOOK_ORDER[b.bookId]);
   }, [data.notes, crossRefs, noteId, crossRefSearch]);
 
+  if (!note) return <div className="empty">找不到此筆記</div>;
+
   const addCrossRef = (toNoteId, annotation) => {
     const newRef = { id: uid(), fromId: noteId, toId: toNoteId, annotation: annotation || "", createdAt: Date.now() };
     onUpdate({ ...data, crossRefs: [...(data.crossRefs || []), newRef] });
@@ -127,7 +141,7 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
           {(note.btTags || []).map(id => { const tag = data.btTags.find(t => t.id === id); return tag ? <TagPill key={id} tag={tag} type="bt" /> : null; })}
           {(note.stTags || []).map(id => { const tag = data.stTags.find(t => t.id === id); return tag ? <TagPill key={id} tag={tag} type="st" /> : null; })}
         </div>
-        <div className="md-preview" dangerouslySetInnerHTML={{ __html: parseMarkdown(note.content) }} />
+        <div className="md-preview" onClick={handleContentClick} dangerouslySetInnerHTML={{ __html: parseMarkdown(note.content) }} />
         <div className="note-meta" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
           建立：{new Date(note.createdAt).toLocaleString("zh-TW")}
           {note.updatedAt && note.updatedAt !== note.createdAt && <span> ｜ 更新：{new Date(note.updatedAt).toLocaleString("zh-TW")}</span>}
@@ -284,6 +298,8 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
         btTags={(note.btTags || []).map(id => data.btTags.find(t => t.id === id)).filter(Boolean)}
         stTags={(note.stTags || []).map(id => data.stTags.find(t => t.id === id)).filter(Boolean)}
       /></div>
+
+      {scriptureRef && <ScriptureRefPopover info={scriptureRef} onClose={() => setScriptureRef(null)} />}
     </div>
   );
 }

@@ -1,7 +1,12 @@
+import { linkifyScriptureRefs } from './scriptureRefs.js';
+
 export function parseMarkdown(md) {
   if (!md) return "";
   let html = md
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Wrap scripture references while the text is plain (post-escape, pre-markup).
+  html = linkifyScriptureRefs(html);
+  html = html
     .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:600;margin:12px 0 4px;color:var(--text)">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 style="font-size:17px;font-weight:600;margin:14px 0 4px;color:var(--text)">$1</h2>')
     .replace(/^# (.+)$/gm, '<h1 style="font-size:19px;font-weight:700;margin:16px 0 6px;color:var(--text)">$1</h1>')

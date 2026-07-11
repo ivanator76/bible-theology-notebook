@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from './hooks/useTheme.js';
 import { Icons } from './components/Icons.jsx';
 import { GlobalSearch } from './components/GlobalSearch.jsx';
@@ -51,6 +51,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const { darkMode, toggleDark } = useTheme();
+  // Tracks whether an open editor has unsaved changes, so navigation can warn.
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     fetchAllData().then(d => { setData(d); setLoading(false); }).catch(e => {
@@ -69,6 +71,8 @@ export default function App() {
   }, []);
 
   const navigate = useCallback((pg, params = {}) => {
+    if (dirtyRef.current && !confirm("您有未儲存的變更，確定要離開嗎？")) return;
+    dirtyRef.current = false;
     setPage(pg); setPageParams(params); setSidebarOpen(false);
   }, []);
 
@@ -137,7 +141,16 @@ export default function App() {
         if (old && JSON.stringify(old) !== JSON.stringify(note))
           await fetch(`/api/notes/${note.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(note) });
       }
-    } catch (e) { console.error('Persist error:', e); }
+    } catch (e) {
+      console.error('Persist error:', e);
+      alert('儲存失敗，將重新載入最新資料以避免資料不一致');
+      try {
+        const fresh = await fetchAllData();
+        setData(fresh);
+      } catch (reloadErr) {
+        console.error('Reload after persist failure also failed:', reloadErr);
+      }
+    }
   }, [data]);
 
   const handleSaveNote = useCallback(async (note, docLinks) => {
@@ -231,8 +244,8 @@ export default function App() {
     switch (page) {
       case "dashboard": return <Dashboard data={data} onNavigate={navigate} />;
       case "notes": return <NotesList data={data} onNavigate={navigate} initialFilter={pageParams} />;
-      case "new-note": return <NoteEditor data={data} onSave={handleSaveNote} onCancel={() => navigate("notes")} onNavigate={navigate} />;
-      case "edit-note": return <NoteEditor data={data} noteId={pageParams.noteId} onSave={handleSaveNote} onCancel={() => navigate("view-note", { noteId: pageParams.noteId })} onNavigate={navigate} />;
+      case "new-note": return <NoteEditor data={data} onSave={handleSaveNote} onCancel={() => navigate("notes")} onNavigate={navigate} onDirtyChange={d => { dirtyRef.current = d; }} />;
+      case "edit-note": return <NoteEditor data={data} noteId={pageParams.noteId} onSave={handleSaveNote} onCancel={() => navigate("view-note", { noteId: pageParams.noteId })} onNavigate={navigate} onDirtyChange={d => { dirtyRef.current = d; }} />;
       case "view-note": return <NoteView data={data} noteId={pageParams.noteId} onNavigate={navigate} onDelete={handleDeleteNote} onUpdate={persist} />;
       case "doctrines": return <DoctrinePage data={data} onNavigate={navigate} />;
       case "chains": return <ThemeChainPage data={data} onUpdate={persist} onNavigate={navigate} initialChainId={pageParams.chainId} />;

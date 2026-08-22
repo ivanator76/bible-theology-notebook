@@ -3,11 +3,12 @@ version: "3.9"
 services:
   app:
     build: .
-    container_name: bible-theology-notebook
+    container_name: bible-notebook
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/backend/data
+      # Keep the existing NAS data directory outside the replaceable source tree.
+      - ../data:/app/backend/data
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -15,6 +16,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/tags"]

@@ -1,18 +1,28 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getBookRef } from '../utils/getBookRef.js';
 import { uid } from '../utils/uid.js';
 import { Icons } from '../components/Icons.jsx';
 import { RESOURCE_TYPES } from '../data/resourceTypes.js';
 
-export function ResourcesPage({ data, onUpdate, onNavigate }) {
+export function ResourcesPage({ data, onUpdate, onNavigate, initialResourceId }) {
   const { resources = [], resourceLinks = [], notes } = data;
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
   const [linking, setLinking] = useState(null);
   const [fetchingUrl, setFetchingUrl] = useState(false);
+  const [focusedId, setFocusedId] = useState(initialResourceId || null);
+  const resourceRefs = useRef({});
 
   const [form, setForm] = useState({ type: "url", title: "", url: "", author: "", publication: "", pages: "", summary: "" });
+
+  useEffect(() => {
+    if (!initialResourceId || !resources.some(resource => resource.id === initialResourceId)) return undefined;
+    setSearch(''); setFilterType(''); setFocusedId(initialResourceId);
+    const scrollTimer = setTimeout(() => resourceRefs.current[initialResourceId]?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    const clearTimer = setTimeout(() => setFocusedId(null), 3000);
+    return () => { clearTimeout(scrollTimer); clearTimeout(clearTimer); };
+  }, [initialResourceId, resources]);
 
   const resetForm = () => setForm({ type: "url", title: "", url: "", author: "", publication: "", pages: "", summary: "" });
 
@@ -188,7 +198,7 @@ export function ResourcesPage({ data, onUpdate, onNavigate }) {
           const linked = getLinkedNotes(r.id);
           const typeInfo = RESOURCE_TYPES.find(t => t.id === r.type);
           return (
-            <div key={r.id} className="card" style={{ marginBottom: 10 }}>
+            <div key={r.id} ref={element => { resourceRefs.current[r.id] = element; }} className={`card resource-card ${focusedId === r.id ? 'resource-focused' : ''}`} style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>

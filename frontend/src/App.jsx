@@ -10,6 +10,7 @@ import { DoctrinePage } from './pages/DoctrinePage.jsx';
 import { ThemeChainPage } from './pages/ThemeChainPage.jsx';
 import { ResourcesPage } from './pages/ResourcesPage.jsx';
 import { TagManager } from './pages/TagManager.jsx';
+import { ReadingPage } from './pages/ReadingPage.jsx';
 
 const API = async (path, options = {}) => {
   const res = await fetch(path, {
@@ -59,6 +60,12 @@ export default function App() {
       console.error('Failed to load data:', e);
       setLoading(false);
     });
+  }, []);
+
+  const refreshData = useCallback(async () => {
+    const fresh = await fetchAllData();
+    setData(fresh);
+    return fresh;
   }, []);
 
   useEffect(() => {
@@ -167,7 +174,8 @@ export default function App() {
       docLinks.forEach(dl => newData.doctrineLinks.push({ noteId: note.id, doctrineId: dl.doctrineId, annotation: dl.annotation }));
       setData(newData);
       navigate("view-note", { noteId: note.id });
-    } catch (e) { console.error('Save note error:', e); alert('儲存失敗，請稍後重試'); }
+      return true;
+    } catch (e) { console.error('Save note error:', e); alert('儲存失敗，請稍後重試'); return false; }
   }, [data, navigate]);
 
   const handleDeleteNote = useCallback(async (noteId) => {
@@ -232,6 +240,7 @@ export default function App() {
   const navItems = [
     { id: "dashboard", icon: <Icons.Home />, label: "Dashboard 總覽" },
     { id: "notes", icon: <Icons.FileText />, label: "筆記 Notes" },
+    { id: "reading", icon: <Icons.Book />, label: "讀經模式 Reading" },
     { id: "chains", icon: <Icons.Layers />, label: "追蹤鏈 Chains" },
     { id: "resources", icon: <Icons.Globe />, label: "外部資料 Resources" },
     { id: "doctrines", icon: <Icons.Chain />, label: "教義 Doctrines" },
@@ -244,13 +253,14 @@ export default function App() {
     switch (page) {
       case "dashboard": return <Dashboard data={data} onNavigate={navigate} />;
       case "notes": return <NotesList data={data} onNavigate={navigate} initialFilter={pageParams} />;
-      case "new-note": return <NoteEditor data={data} onSave={handleSaveNote} onCancel={() => navigate("notes")} onNavigate={navigate} onDirtyChange={d => { dirtyRef.current = d; }} />;
+      case "new-note": return <NoteEditor data={data} initialRef={pageParams} onSave={handleSaveNote} onCancel={() => navigate("notes")} onNavigate={navigate} onDirtyChange={d => { dirtyRef.current = d; }} />;
       case "edit-note": return <NoteEditor data={data} noteId={pageParams.noteId} onSave={handleSaveNote} onCancel={() => navigate("view-note", { noteId: pageParams.noteId })} onNavigate={navigate} onDirtyChange={d => { dirtyRef.current = d; }} />;
-      case "view-note": return <NoteView data={data} noteId={pageParams.noteId} onNavigate={navigate} onDelete={handleDeleteNote} onUpdate={persist} />;
+      case "view-note": return <NoteView data={data} noteId={pageParams.noteId} onNavigate={navigate} onDelete={handleDeleteNote} onUpdate={persist} onRefresh={refreshData} />;
       case "doctrines": return <DoctrinePage data={data} onNavigate={navigate} />;
       case "chains": return <ThemeChainPage data={data} onUpdate={persist} onNavigate={navigate} initialChainId={pageParams.chainId} />;
-      case "resources": return <ResourcesPage data={data} onUpdate={persist} onNavigate={navigate} />;
+      case "resources": return <ResourcesPage data={data} onUpdate={persist} onNavigate={navigate} initialResourceId={pageParams.resourceId} />;
       case "tags": return <TagManager data={data} onUpdate={persist} />;
+      case "reading": return <ReadingPage data={data} onNavigate={navigate} initialBookId={pageParams.bookId} initialChapter={pageParams.chapter} />;
       default: return <Dashboard data={data} onNavigate={navigate} />;
     }
   };

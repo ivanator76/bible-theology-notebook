@@ -11,7 +11,7 @@ RUN npm run build
 FROM node:20-alpine
 
 # Install nginx and supervisor
-RUN apk add --no-cache nginx supervisor
+RUN apk add --no-cache nginx supervisor font-noto-cjk
 
 WORKDIR /app
 

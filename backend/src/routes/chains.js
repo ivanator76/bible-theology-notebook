@@ -16,6 +16,7 @@ router.post('/', (req, res) => {
     id, name, description || null, btTagId || null, JSON.stringify(noteIds || []),
     createdAt || Date.now(), updatedAt || Date.now()
   );
+  db.rebuildSearchIndex();
   res.json({ id });
 });
 
@@ -25,11 +26,13 @@ router.put('/:id', (req, res) => {
     name, description || null, btTagId || null, JSON.stringify(noteIds || []),
     updatedAt || Date.now(), req.params.id
   );
+  db.rebuildSearchIndex();
   res.json({ id: req.params.id });
 });
 
 router.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM theme_chains WHERE id = ?').run(req.params.id);
+  db.rebuildSearchIndex();
   res.json({ deleted: req.params.id });
 });
 

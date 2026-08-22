@@ -12,13 +12,13 @@ import { TagSelector } from '../components/TagSelector.jsx';
 import { DoctrineLinkEditor } from '../components/DoctrineLinkEditor.jsx';
 import { ScripturePanel } from '../components/ScripturePanel.jsx';
 
-export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirtyChange }) {
+export function NoteEditor({ data, noteId, initialRef = {}, onSave, onCancel, onNavigate, onDirtyChange }) {
   const existing = noteId ? data.notes.find(n => n.id === noteId) : null;
-  const [bookId, setBookId] = useState(existing?.bookId || "");
-  const [chapterStart, setChapterStart] = useState(existing?.chapterStart || "");
-  const [chapterEnd, setChapterEnd] = useState(existing?.chapterEnd || "");
-  const [verseStart, setVerseStart] = useState(existing?.verseStart || "");
-  const [verseEnd, setVerseEnd] = useState(existing?.verseEnd || "");
+  const [bookId, setBookId] = useState(existing?.bookId || initialRef.bookId || "");
+  const [chapterStart, setChapterStart] = useState(existing?.chapterStart || initialRef.chapterStart || "");
+  const [chapterEnd, setChapterEnd] = useState(existing?.chapterEnd || initialRef.chapterEnd || "");
+  const [verseStart, setVerseStart] = useState(existing?.verseStart || initialRef.verseStart || "");
+  const [verseEnd, setVerseEnd] = useState(existing?.verseEnd || initialRef.verseEnd || "");
   const [title, setTitle] = useState(existing?.title || "");
   const [content, setContent] = useState(existing?.content || "");
   const [selBt, setSelBt] = useState(existing?.btTags || []);
@@ -27,6 +27,9 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirty
     noteId ? (data.doctrineLinks || []).filter(l => l.noteId === noteId).map(l => ({ doctrineId: l.doctrineId, annotation: l.annotation })) : []
   );
   const [preview, setPreview] = useState(false);
+  const [draftAvailable, setDraftAvailable] = useState(null);
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const draftKey = noteId ? `bible-note-draft:${noteId}` : 'bible-note-draft:new';
 
   const initialDocLinks = noteId
     ? (data.doctrineLinks || []).filter(l => l.noteId === noteId).map(l => ({ doctrineId: l.doctrineId, annotation: l.annotation }))
@@ -54,6 +57,38 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirty
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      const baseline = existing?.updatedAt || 0;
+      if (stored?.savedAt > baseline) setDraftAvailable(stored);
+    } catch { /* Ignore corrupt or unavailable local storage. */ }
+  }, [draftKey, existing?.updatedAt]);
+
+  useEffect(() => {
+    if (!isDirty) return undefined;
+    const timer = setTimeout(() => {
+      const draft = { bookId, chapterStart, chapterEnd, verseStart, verseEnd, title, content, selBt, selSt, docLinks, savedAt: Date.now() };
+      try { localStorage.setItem(draftKey, JSON.stringify(draft)); setDraftSavedAt(draft.savedAt); }
+      catch { /* Draft protection must never interrupt editing. */ }
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [isDirty, draftKey, bookId, chapterStart, chapterEnd, verseStart, verseEnd, title, content, selBt, selSt, docLinks]);
+
+  const restoreDraft = () => {
+    const draft = draftAvailable;
+    if (!draft) return;
+    setBookId(draft.bookId || ''); setChapterStart(draft.chapterStart || ''); setChapterEnd(draft.chapterEnd || '');
+    setVerseStart(draft.verseStart || ''); setVerseEnd(draft.verseEnd || ''); setTitle(draft.title || ''); setContent(draft.content || '');
+    setSelBt(draft.selBt || []); setSelSt(draft.selSt || []); setDocLinks(draft.docLinks || []);
+    setDraftSavedAt(draft.savedAt); setDraftAvailable(null);
+  };
+
+  const discardDraft = () => {
+    try { localStorage.removeItem(draftKey); } catch { /* no-op */ }
+    setDraftAvailable(null); setDraftSavedAt(null);
+  };
+
   const book = BOOK_MAP[bookId];
   const maxCh = book ? book.ch : 0;
   const chapterOptions = Array.from({ length: maxCh }, (_, i) => i + 1);
@@ -64,7 +99,7 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirty
   const toggleBt = id => setSelBt(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleSt = id => setSelSt(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!bookId) return alert("請選擇書卷");
     if (!content.trim()) return alert("請輸入筆記內容");
     const note = {
@@ -79,7 +114,8 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirty
     };
     // Clear dirty flag before save-triggered navigation so it doesn't warn.
     onDirtyChange?.(false);
-    onSave(note, docLinks);
+    const saved = await onSave(note, docLinks);
+    if (saved) discardDraft();
   };
 
   // Cmd/Ctrl+S saves; use a ref so the listener always calls the latest handler.
@@ -108,6 +144,16 @@ export function NoteEditor({ data, noteId, onSave, onCancel, onNavigate, onDirty
           <button className="btn btn-primary" onClick={handleSave}>儲存</button>
         </div>
       </div>
+
+      {draftAvailable && (
+        <div className="draft-banner">
+          <div><strong>找到自動儲存草稿</strong><span>{new Date(draftAvailable.savedAt).toLocaleString('zh-TW')}</span></div>
+          <div><button className="btn btn-sm btn-primary" onClick={restoreDraft}>還原草稿</button><button className="btn btn-sm" onClick={discardDraft}>捨棄</button></div>
+        </div>
+      )}
+      {!draftAvailable && isDirty && (
+        <div className="draft-status">{draftSavedAt ? `草稿已自動儲存 ${new Date(draftSavedAt).toLocaleTimeString('zh-TW')}` : '正在保護草稿…'}</div>
+      )}
 
       {preview ? (
         <div className="card">

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { BOOK_MAP, BOOK_ORDER } from '../data/bibleBooks.js';
 import { getBookRef } from '../utils/getBookRef.js';
 import { uid } from '../utils/uid.js';
@@ -35,7 +35,53 @@ function CrossRefAnnotation({ targetNote, onConfirm, onCancel }) {
   );
 }
 
-export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
+function VersionHistory({ noteId, onRefresh }) {
+  const [open, setOpen] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fetch(`/api/notes/${noteId}/versions`).then(response => response.json()).then(setVersions).finally(() => setLoading(false));
+  }, [open, noteId]);
+
+  const restore = async version => {
+    if (!confirm(`確定還原到 ${new Date(version.savedAt).toLocaleString('zh-TW')} 的版本？目前內容也會先保留成一版。`)) return;
+    const response = await fetch(`/api/notes/${noteId}/versions/${version.versionId}/restore`, { method: 'POST' });
+    if (!response.ok) return alert('版本還原失敗');
+    await onRefresh?.();
+    setOpen(false); setSelected(null);
+  };
+
+  return (
+    <div className="card no-print" style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="card-title" style={{ margin: 0 }}><Icons.History /> 修訂歷史</div>
+        <button className="btn btn-sm" onClick={() => setOpen(value => !value)}>{open ? '收合' : '查看歷史'}</button>
+      </div>
+      {open && (
+        <div className="version-history">
+          {loading ? <div className="empty"><Icons.Loader /> 載入中…</div> : versions.length === 0 ? (
+            <div className="empty" style={{ padding: 20 }}>尚無舊版本；下次儲存修改時會自動建立快照。</div>
+          ) : versions.map(version => (
+            <div className="version-row" key={version.versionId}>
+              <div className="version-meta">
+                <strong>{new Date(version.savedAt).toLocaleString('zh-TW')}</strong>
+                <span>{version.title || '無標題'} · {(version.content || '').length} 字</span>
+              </div>
+              <div><button className="btn btn-sm" onClick={() => setSelected(selected?.versionId === version.versionId ? null : version)}>預覽</button> <button className="btn btn-sm btn-primary" onClick={() => restore(version)}>還原</button></div>
+              {selected?.versionId === version.versionId && <pre className="version-preview">{version.content || '（無內容）'}</pre>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate, onRefresh }) {
   const note = data.notes.find(n => n.id === noteId);
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [resSearch, setResSearch] = useState("");
@@ -293,10 +339,15 @@ export function NoteView({ data, noteId, onNavigate, onDelete, onUpdate }) {
         )}
       </div>
 
+      <VersionHistory noteId={noteId} onRefresh={onRefresh} />
+
       <div className="no-print"><AiPanel
         note={note}
         btTags={(note.btTags || []).map(id => data.btTags.find(t => t.id === id)).filter(Boolean)}
         stTags={(note.stTags || []).map(id => data.stTags.find(t => t.id === id)).filter(Boolean)}
+        allNotes={data.notes}
+        onRefresh={onRefresh}
+        onNavigate={onNavigate}
       /></div>
 
       {scriptureRef && <ScriptureRefPopover info={scriptureRef} onClose={() => setScriptureRef(null)} />}

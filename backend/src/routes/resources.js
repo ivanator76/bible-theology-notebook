@@ -17,6 +17,7 @@ router.post('/', (req, res) => {
     id, type || 'url', title, url || null, author || null, publication || null, pages || null, summary || null,
     createdAt || Date.now(), updatedAt || Date.now()
   );
+  db.rebuildSearchIndex();
   res.json({ id });
 });
 
@@ -26,11 +27,13 @@ router.put('/:id', (req, res) => {
     type || 'url', title, url || null, author || null, publication || null, pages || null, summary || null,
     updatedAt || Date.now(), req.params.id
   );
+  db.rebuildSearchIndex();
   res.json({ id: req.params.id });
 });
 
 router.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM resources WHERE id = ?').run(req.params.id);
+  db.rebuildSearchIndex();
   res.json({ deleted: req.params.id });
 });
 

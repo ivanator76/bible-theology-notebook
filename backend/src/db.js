@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const { BOOK_MAP } = require('./bookMeta');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../data/notebook.db');
 
@@ -95,7 +96,55 @@ db.exec(`
     data TEXT NOT NULL,
     cached_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS note_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    chapter_start TEXT,
+    chapter_end TEXT,
+    verse_start TEXT,
+    verse_end TEXT,
+    title TEXT,
+    content TEXT,
+    bt_tags TEXT DEFAULT '[]',
+    st_tags TEXT DEFAULT '[]',
+    saved_at INTEGER NOT NULL,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    raw_text TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id, saved_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_suggestions_note ON ai_suggestions(note_id, created_at DESC);
 `);
+
+// A single denormalized FTS index keeps command-palette searches fast while
+// still covering annotations and descriptions that live outside `notes`.
+try {
+  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+    entity_type UNINDEXED, entity_id UNINDEXED, parent_id UNINDEXED,
+    title, body, ref, tokenize='trigram case_sensitive 0'
+  )`);
+} catch {
+  // Older SQLite builds may not expose the trigram tokenizer. unicode61 still
+  // provides a working FTS5 index (the search route adds a LIKE fallback).
+  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+    entity_type UNINDEXED, entity_id UNINDEXED, parent_id UNINDEXED,
+    title, body, ref, tokenize='unicode61 remove_diacritics 2'
+  )`);
+}
 
 // Seed default tags if empty
 const btCount = db.prepare('SELECT COUNT(*) as n FROM bt_tags').get().n;
@@ -139,5 +188,34 @@ if (stCount === 0) {
   });
   insertMany(defaultSt);
 }
+
+function rebuildSearchIndex() {
+  const insert = db.prepare(`INSERT INTO search_index
+    (entity_type, entity_id, parent_id, title, body, ref) VALUES (?, ?, ?, ?, ?, ?)`);
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM search_index').run();
+
+    for (const n of db.prepare('SELECT * FROM notes').all()) {
+      const book = BOOK_MAP[n.book_id];
+      const ref = [n.book_id, book?.zh, book?.en, n.chapter_start, n.verse_start].filter(Boolean).join(' ');
+      insert.run('note', n.id, n.id, n.title || '', n.content || '', ref);
+    }
+    for (const l of db.prepare(`SELECT dl.id, dl.note_id, dl.annotation, st.name
+      FROM doctrine_links dl LEFT JOIN st_tags st ON st.id = dl.doctrine_id`).all()) {
+      insert.run('doctrine_annotation', String(l.id), l.note_id, l.name || '教義註解', l.annotation || '', '');
+    }
+    for (const c of db.prepare('SELECT * FROM theme_chains').all()) {
+      insert.run('theme_chain', c.id, c.id, c.name || '', c.description || '', '');
+    }
+    for (const r of db.prepare('SELECT * FROM resources').all()) {
+      const body = [r.author, r.publication, r.pages, r.summary, r.url].filter(Boolean).join('\n');
+      insert.run('resource', r.id, r.id, r.title || '', body, '');
+    }
+  });
+  tx();
+}
+
+db.rebuildSearchIndex = rebuildSearchIndex;
+rebuildSearchIndex();
 
 module.exports = db;

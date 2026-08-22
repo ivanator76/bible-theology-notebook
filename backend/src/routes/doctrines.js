@@ -16,11 +16,13 @@ router.put('/:noteId', (req, res) => {
     links.forEach(l => insert.run(noteId, l.doctrineId, l.annotation || ''));
   });
   tx();
+  db.rebuildSearchIndex();
   res.json({ ok: true });
 });
 
 router.delete('/:noteId', (req, res) => {
   db.prepare('DELETE FROM doctrine_links WHERE note_id = ?').run(req.params.noteId);
+  db.rebuildSearchIndex();
   res.json({ ok: true });
 });
 

@@ -24,6 +24,8 @@ app.use('/api/import', require('./routes/backup').importRouter);
 app.use('/api/bible', require('./routes/bible'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/research-export', require('./routes/researchExport'));
 app.use('/api', require('./routes/utils'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));

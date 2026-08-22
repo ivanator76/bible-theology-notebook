@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Icons } from './Icons.jsx';
 
 const PROVIDERS = [
@@ -20,12 +20,21 @@ const PROVIDERS = [
     placeholder: 'AIzaSy...',
     url: 'aistudio.google.com',
   },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    placeholder: 'sk-or-v1-...',
+    url: 'openrouter.ai/keys',
+  },
 ];
 
 export function ApiKeyModal({ onClose, onSaved }) {
   const [settings, setSettings] = useState(null);
   const [activeTab, setActiveTab] = useState('anthropic');
-  const [keys, setKeys] = useState({ anthropic: '', openai: '', google: '' });
+  const [keys, setKeys] = useState({ anthropic: '', openai: '', google: '', openrouter: '' });
+  const [model, setModel] = useState('');
+  const [models, setModels] = useState([]);
+  const [modelsFailed, setModelsFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -33,10 +42,40 @@ export function ApiKeyModal({ onClose, onSaved }) {
     fetch('/api/settings').then(r => r.json()).then(d => {
       setSettings(d);
       setActiveTab(d.activeProvider || 'anthropic');
+      setModel(d.openrouterModel || '');
     }).catch(() => {});
   };
 
   useEffect(() => { load(); }, []);
+
+  const loadModels = useCallback(() => {
+    setModelsFailed(false);
+    fetch('/api/settings/openrouter-models')
+      .then(r => r.json())
+      .then(d => {
+        const list = d.models || [];
+        // An upstream failure comes back as an empty list; never let that
+        // overwrite a catalogue we already loaded.
+        setModels(prev => (list.length ? list : prev));
+        setModelsFailed(!list.length);
+      })
+      .catch(() => setModelsFailed(true));
+  }, []);
+
+  // Only fetch the (large) catalogue once the user actually opens the tab.
+  useEffect(() => {
+    if (activeTab === 'openrouter' && !models.length && !modelsFailed) loadModels();
+  }, [activeTab, models.length, modelsFailed, loadModels]);
+
+  const saveModel = async (value) => {
+    setModel(value);
+    await fetch('/api/settings/openrouter-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: value }),
+    });
+    onSaved();
+  };
 
   const save = async () => {
     const key = keys[activeTab];
@@ -191,6 +230,36 @@ export function ApiKeyModal({ onClose, onSaved }) {
             disabled={isEnv}
           />
         </div>
+
+        {/* OpenRouter fronts hundreds of models, so it needs a model choice too */}
+        {activeTab === 'openrouter' && (
+          <div className="field">
+            <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              使用的模型{models.length ? `（可從 ${models.length} 個模型中選擇）` : ''}
+              {modelsFailed && (
+                <button className="btn-ghost" onClick={loadModels}
+                  style={{ fontSize: 11, color: 'var(--danger)', textTransform: 'none' }}>
+                  模型清單載入失敗，重試
+                </button>
+              )}
+            </label>
+            <input
+              className="input"
+              list="openrouter-model-list"
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              onBlur={e => e.target.value !== (settings?.openrouterModel || '') && saveModel(e.target.value.trim())}
+              placeholder={settings?.openrouterModelDefault || 'anthropic/claude-sonnet-4.5'}
+            />
+            <datalist id="openrouter-model-list">
+              {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </datalist>
+            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6, lineHeight: 1.7 }}>
+              留空則使用預設模型 <code>{settings?.openrouterModelDefault}</code>。
+              {settings?.openrouterModelFromEnv && ' 目前由環境變數 OPENROUTER_MODEL 指定。'}
+            </p>
+          </div>
+        )}
 
         {error && (
           <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 10 }}>{error}</div>

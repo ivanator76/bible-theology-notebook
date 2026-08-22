@@ -18,8 +18,11 @@
     "better-sqlite3": "^12.8.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
+    "docx": "^9.7.1",
     "express": "^4.18.2",
-    "node-fetch": "^2.7.0"
+    "fontkit": "^2.0.4",
+    "node-fetch": "^2.7.0",
+    "pdfkit": "^0.19.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",
@@ -33,7 +36,13 @@
     "mac": {
       "category": "public.app-category.education",
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ]
     },
     "directories": {

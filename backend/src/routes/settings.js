@@ -1,28 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
-
-function settingsPath() {
-  return process.env.SETTINGS_PATH || path.join(__dirname, '../../data/settings.json');
-}
-
-function readSettings() {
-  try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); }
-  catch { return {}; }
-}
-
-function writeSettings(s) {
-  const p = settingsPath();
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(s, null, 2));
-}
-
-const PROVIDERS = {
-  anthropic: { envVar: 'ANTHROPIC_API_KEY', settingKey: 'anthropicApiKey', label: 'Anthropic' },
-  openai:    { envVar: 'OPENAI_API_KEY',    settingKey: 'openaiApiKey',    label: 'OpenAI' },
-  google:    { envVar: 'GOOGLE_API_KEY',    settingKey: 'googleApiKey',    label: 'Google' },
-};
+const fetch = require('node-fetch');
+const {
+  PROVIDERS, DEFAULT_OPENROUTER_MODEL,
+  readSettings, writeSettings, openRouterModel,
+} = require('../aiProviders');
 
 // GET /api/settings
 router.get('/', (req, res) => {
@@ -33,7 +15,6 @@ router.get('/', (req, res) => {
     const fromEnv  = !!process.env[cfg.envVar];
     const fileKey  = settings[cfg.settingKey] || '';
     const fromFile = !!fileKey;
-    const key      = fromEnv ? process.env[cfg.envVar] : fileKey;
     providers[id] = {
       hasKey:    fromEnv || fromFile,
       source:    fromEnv ? 'env' : fromFile ? 'file' : null,
@@ -53,6 +34,9 @@ router.get('/', (req, res) => {
     hasAiKey: Object.values(providers).some(p => p.hasKey),
     activeProvider,
     providers,
+    openrouterModel: openRouterModel(settings),
+    openrouterModelDefault: DEFAULT_OPENROUTER_MODEL,
+    openrouterModelFromEnv: !settings.openrouterModel && !!process.env.OPENROUTER_MODEL,
     // Legacy fields for old clients
     source: providers[activeProvider]?.source,
     maskedKey: providers[activeProvider]?.maskedKey,
@@ -91,6 +75,52 @@ router.post('/ai-provider', (req, res) => {
   s.aiProvider = provider;
   writeSettings(s);
   res.json({ ok: true });
+});
+
+// POST /api/settings/openrouter-model  { model }
+router.post('/openrouter-model', (req, res) => {
+  const model = String(req.body.model || '').trim();
+  const s = readSettings();
+  if (model) s.openrouterModel = model;
+  else delete s.openrouterModel;   // fall back to env var or built-in default
+  writeSettings(s);
+  res.json({ ok: true, model: openRouterModel(s) });
+});
+
+// OpenRouter's catalogue is public and large, so proxy it and cache for an hour
+// instead of shipping a hard-coded list that goes stale.
+let modelCache = { at: 0, models: [] };
+let inFlight = null;
+
+async function fetchOpenRouterModels() {
+  const response = await fetch('https://openrouter.ai/api/v1/models', { timeout: 15000 });
+  if (!response.ok) throw new Error(`OpenRouter 錯誤 ${response.status}`);
+  const data = await response.json();
+  const models = (data.data || [])
+    .map(m => ({
+      id: m.id,
+      name: m.name,
+      contextLength: m.context_length,
+      promptPrice: m.pricing?.prompt,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  modelCache = { at: Date.now(), models };
+  return models;
+}
+
+router.get('/openrouter-models', async (req, res) => {
+  if (Date.now() - modelCache.at < 3600000 && modelCache.models.length) {
+    return res.json({ models: modelCache.models, cached: true });
+  }
+  try {
+    // Collapse concurrent callers onto one upstream request so a burst of them
+    // can't half-succeed and hand different answers back to the same client.
+    if (!inFlight) inFlight = fetchOpenRouterModels().finally(() => { inFlight = null; });
+    res.json({ models: await inFlight, cached: false });
+  } catch (error) {
+    // A failed catalogue fetch must not block typing a model id by hand.
+    res.json({ models: modelCache.models, error: error.message });
+  }
 });
 
 module.exports = router;

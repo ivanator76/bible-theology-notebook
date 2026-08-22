@@ -4,6 +4,7 @@ import { getBookRef } from '../utils/getBookRef.js';
 import { uid } from '../utils/uid.js';
 import { Icons } from '../components/Icons.jsx';
 import { TagPill } from '../components/TagPill.jsx';
+import { ResearchExportButtons } from '../components/ResearchExportButtons.jsx';
 
 export function ThemeChainPage({ data, onUpdate, onNavigate, initialChainId }) {
   const { themeChains = [], notes, btTags } = data;
@@ -173,6 +174,8 @@ export function ThemeChainPage({ data, onUpdate, onNavigate, initialChainId }) {
                   </div>
                 </div>
               </div>
+
+              <ResearchExportButtons kind="chain" id={selectedChain.id} filename={selectedChain.name} />
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>正典順序時間線</span>

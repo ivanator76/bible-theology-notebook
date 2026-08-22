@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { BIBLE_BOOKS, BOOK_MAP, BOOK_ORDER } from '../data/bibleBooks.js';
 import { Icons } from '../components/Icons.jsx';
+import { ResearchExportButtons } from '../components/ResearchExportButtons.jsx';
 
 export function DoctrinePage({ data, onNavigate }) {
   const { notes, stTags, doctrineLinks } = data;
@@ -83,6 +84,8 @@ export function DoctrinePage({ data, onNavigate }) {
                   )}
                 </div>
               </div>
+
+              <ResearchExportButtons kind="doctrine" id={selected} filename={selectedTag?.name || 'doctrine-research'} />
 
               <div className="chain-timeline">
                 {linkedNotes.map((item, i) => {

@@ -31,8 +31,19 @@ exportRouter.get('/', (req, res) => {
   const crossRefs = db.prepare('SELECT * FROM cross_refs').all().map(r => ({
     id: r.id, fromId: r.from_id, toId: r.to_id, annotation: r.annotation, createdAt: r.created_at,
   }));
+  const noteVersions = db.prepare('SELECT * FROM note_versions').all().map(v => ({
+    versionId: v.id, noteId: v.note_id, bookId: v.book_id,
+    chapterStart: v.chapter_start, chapterEnd: v.chapter_end,
+    verseStart: v.verse_start, verseEnd: v.verse_end, title: v.title, content: v.content,
+    btTags: JSON.parse(v.bt_tags || '[]'), stTags: JSON.parse(v.st_tags || '[]'), savedAt: v.saved_at,
+  }));
+  const aiSuggestions = db.prepare('SELECT * FROM ai_suggestions').all().map(s => ({
+    noteId: s.note_id, type: s.type, provider: s.provider,
+    result: JSON.parse(s.result_json || '{}'), rawText: s.raw_text, status: s.status,
+    createdAt: s.created_at, updatedAt: s.updated_at,
+  }));
 
-  const payload = { notes, btTags, stTags, doctrineLinks, resources, resourceLinks, themeChains, crossRefs, exportedAt: Date.now() };
+  const payload = { notes, btTags, stTags, doctrineLinks, resources, resourceLinks, themeChains, crossRefs, noteVersions, aiSuggestions, exportedAt: Date.now() };
 
   res.setHeader('Content-Disposition', 'attachment; filename="bible-notebook-backup.json"');
   res.setHeader('Content-Type', 'application/json');
@@ -40,11 +51,13 @@ exportRouter.get('/', (req, res) => {
 });
 
 importRouter.post('/', (req, res) => {
-  const { notes = [], btTags = [], stTags = [], doctrineLinks = [], resources = [], resourceLinks = [], themeChains = [], crossRefs = [] } = req.body;
+  const { notes = [], btTags = [], stTags = [], doctrineLinks = [], resources = [], resourceLinks = [], themeChains = [], crossRefs = [], noteVersions = [], aiSuggestions = [] } = req.body;
 
   const tx = db.transaction(() => {
     // Clear all tables
     db.prepare('DELETE FROM cross_refs').run();
+    db.prepare('DELETE FROM ai_suggestions').run();
+    db.prepare('DELETE FROM note_versions').run();
     db.prepare('DELETE FROM resource_links').run();
     db.prepare('DELETE FROM doctrine_links').run();
     db.prepare('DELETE FROM theme_chains').run();
@@ -82,9 +95,23 @@ importRouter.post('/', (req, res) => {
     // Insert cross refs
     const insertCr = db.prepare('INSERT INTO cross_refs (id, from_id, to_id, annotation, created_at) VALUES (?, ?, ?, ?, ?)');
     crossRefs.forEach(r => insertCr.run(r.id, r.fromId, r.toId, r.annotation || '', r.createdAt || Date.now()));
+
+    const insertVersion = db.prepare(`INSERT INTO note_versions
+      (note_id, book_id, chapter_start, chapter_end, verse_start, verse_end, title, content, bt_tags, st_tags, saved_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    noteVersions.forEach(v => insertVersion.run(v.noteId, v.bookId, v.chapterStart || null, v.chapterEnd || null,
+      v.verseStart || null, v.verseEnd || null, v.title || null, v.content || null,
+      JSON.stringify(v.btTags || []), JSON.stringify(v.stTags || []), v.savedAt || Date.now()));
+
+    const insertAi = db.prepare(`INSERT INTO ai_suggestions
+      (note_id, type, provider, result_json, raw_text, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    aiSuggestions.forEach(s => insertAi.run(s.noteId, s.type, s.provider || 'unknown', JSON.stringify(s.result || {}),
+      s.rawText || null, s.status || 'pending', s.createdAt || Date.now(), s.updatedAt || Date.now()));
   });
 
   tx();
+  db.rebuildSearchIndex();
   res.json({ ok: true, imported: { notes: notes.length, resources: resources.length } });
 });
 
